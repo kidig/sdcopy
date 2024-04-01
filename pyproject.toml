@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "sdcopy"
+version = "0.1.0"
+description = "Tool for saving files off SD cards"
+authors = ["Dmitry Gerasimenko <kiddima@gmail.com>"]
+#readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+click = "^8.1.7"
+
+
+[tool.poetry.group.dev.dependencies]
+pre-commit = "^3.7.0"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+#include = '\\.pyi?$'
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "W", "F", "I001"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
