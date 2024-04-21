@@ -44,4 +44,3 @@ fix = true
 
 [tool.ruff.lint]
 extend-select = ["I", "T20", "UP"]
-ignore = ["T201"]

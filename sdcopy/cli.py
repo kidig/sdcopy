@@ -1,15 +1,26 @@
 import argparse
+import logging
 import os
 import shutil
+import time
 from concurrent.futures import ThreadPoolExecutor
 from configparser import ConfigParser
 from datetime import datetime
 from pathlib import Path
 
-DEFAULT_CFG = [
+DEFAULT_CONFIG_PATHS = [
     "config.ini",
     Path.home() / ".sdcopy",
 ]
+if default_config := os.getenv("SDCOPY_CONFIG"):
+    DEFAULT_CONFIG_PATHS = [default_config]
+
+DEFAULT_LOG_LEVEL = "INFO"
+LOG_LEVEL = os.getenv("SDCOPY_LOG_LEVEL", DEFAULT_LOG_LEVEL)
+LOG_FORMAT = os.getenv("SDCOPY_LOG_FORMAT", "%(message)s")
+
+log_level = logging.getLevelNamesMapping().get(LOG_LEVEL, DEFAULT_LOG_LEVEL)
+logging.basicConfig(level=log_level, format=LOG_FORMAT)
 
 
 def file_times(src: Path) -> tuple[float, float]:
@@ -19,19 +30,17 @@ def file_times(src: Path) -> tuple[float, float]:
 
 
 def copy_file(src: Path, dst: Path, dry_run: bool = False) -> None:
-    print(f"{src.name} > {dst} ", end="")
-
     if not dry_run:
         os.makedirs(dst.parent, exist_ok=True)
         if not os.path.exists(dst):
             shutil.copy(src, dst)
             os.utime(dst, times=file_times(src))
-            print("[done]")
+            logging.info("%s -> %s is done", src.name, dst)
         else:
-            print("[already exists]")
+            logging.info("%s -> %s is already exists", src.name, dst)
 
     else:
-        print("[done]")
+        logging.info("%s -> %s is done", src.name, dst)
 
 
 def create_default_config(cfg: ConfigParser, section: str = "Default") -> None:
@@ -49,38 +58,39 @@ def main() -> None:
     parser.add_argument("--threads", type=int, default=4)
 
     args = parser.parse_args()
+    time_start = time.perf_counter()
 
     if args.dry_run:
-        print("Dry-run mode is ENABLED")
+        logging.info("Dry-run mode is ENABLED")
 
     dst_path = Path(args.dest)
 
     config = args.config
     if not config:
-        config = DEFAULT_CFG
+        config = DEFAULT_CONFIG_PATHS
 
     cfg = ConfigParser(interpolation=None)
 
     if config_exists := cfg.read(config):
-        print(f"Config loaded: {config_exists}")
+        logging.info(f"Config loaded: {config_exists}")
     else:
         create_default_config(cfg)
 
-    with ThreadPoolExecutor(args.threads) as t:
-        for section in cfg.sections():
-            folder = cfg[section]
-            if "path" not in folder:
-                continue
+    threads = min(1, args.threads)
+    for section in cfg.sections():
+        folder = cfg[section]
+        if "path" not in folder:
+            continue
 
-            folder_fmt = folder.get("destination")
+        folder_fmt = folder.get("destination")
 
-            src_path = Path(args.source) / folder["path"]
-            print(f"\n{section} [{src_path}]")
+        src_path = Path(args.source) / folder["path"]
+        logging.info("[%s] from %s", section, src_path)
 
-            if not src_path.is_dir():
-                print(f"f{src_path} not found!")
-                continue
-
+        if not src_path.is_dir():
+            logging.warning("%s not found!", src_path)
+            continue
+        with ThreadPoolExecutor(threads) as t:
             for src_file in src_path.iterdir():
                 if src_file.is_dir():
                     continue
@@ -91,9 +101,9 @@ def main() -> None:
                 t.submit(copy_file, src_file, dst_file, args.dry_run)
 
     if args.dry_run:
-        print("Dry-run mode. NO CHANGES MADE")
+        logging.info("Dry-run mode. NO CHANGES MADE")
 
-    print("Done")
+    logging.debug("Done in %.02f sec", (time.perf_counter() - time_start) / 60)
 
 
 if __name__ == "__main__":
