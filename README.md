@@ -49,7 +49,7 @@ Usage: `sdcopy [OPTIONS] [SOURCE]... DEST`
 * `--dry-run`: Perform a trial run without making changes.
 * `--threads`: Number of concurrent thread for file copying (default: 4).
 
-Example command: copying files into separate folders by file modified time and `YYYY-MM-DD` format 
+Example command: copying files into separate folders by file modified time and `YYYY-MM-DD` format
 ```bash
 sdcopy /path/to/source /path/to/destination/%Y-%m-%d/ -c config.ini"
 ```

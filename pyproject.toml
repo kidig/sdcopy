@@ -26,7 +26,6 @@ sdcopy = "sdcopy.__main__:main"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-click = "^8.1.7"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -45,3 +44,4 @@ fix = true
 
 [tool.ruff.lint]
 extend-select = ["I", "T20", "UP"]
+ignore = ["T201"]
