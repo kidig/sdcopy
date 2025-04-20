@@ -1,8 +1,0 @@
-; example for Sony ZV-E10 camera
-[RAW Photos]
-path = DCIM/100MSDCF
-destination = %Y-%m-%d/RAW Photos/
-
-[Videos]
-path = PRIVATE/M4ROOT/CLIP
-destination = %Y-%d-%d/Videos/

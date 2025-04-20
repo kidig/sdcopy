@@ -4,16 +4,8 @@ import os
 import shutil
 import time
 from concurrent.futures import ThreadPoolExecutor
-from configparser import ConfigParser
 from datetime import datetime
-from pathlib import Path
-
-DEFAULT_CONFIG_PATHS = [
-    "config.ini",
-    Path.home() / ".sdcopy",
-]
-if default_config := os.getenv("SDCOPY_CONFIG"):
-    DEFAULT_CONFIG_PATHS = [default_config]
+from typing import cast
 
 DEFAULT_LOG_LEVEL = "INFO"
 LOG_LEVEL = os.getenv("SDCOPY_LOG_LEVEL", DEFAULT_LOG_LEVEL)
@@ -23,87 +15,61 @@ log_level = logging.getLevelNamesMapping().get(LOG_LEVEL, DEFAULT_LOG_LEVEL)
 logging.basicConfig(level=log_level, format=LOG_FORMAT)
 
 
-def file_times(src: Path) -> tuple[float, float]:
-    """Get file timestamps"""
-    stat = src.stat()
-    return stat.st_atime, stat.st_mtime
+def copy_file(source_file: str, dest_file: str, file_stat: os.stat_result, args: argparse.Namespace) -> None:
+    if args.dry_run:
+        logging.info("Copying %s -> %s in Dry-run mode", source_file, dest_file)
+        return
 
+    os.makedirs(os.path.dirname(dest_file), exist_ok=True)
+    if not os.path.exists(dest_file):
+        logging.info("Copying %s -> %s", source_file, dest_file)
 
-def copy_file(src: Path, dst: Path, dry_run: bool = False) -> None:
-    if not dry_run:
-        os.makedirs(dst.parent, exist_ok=True)
-        if not os.path.exists(dst):
-            shutil.copy(src, dst)
-            os.utime(dst, times=file_times(src))
-            logging.info("%s -> %s is done", src.name, dst)
-        else:
-            logging.info("%s -> %s is already exists", src.name, dst)
-
+        copy_start = time.perf_counter()
+        shutil.copy(source_file, dest_file)
+        os.utime(dest_file, times=(file_stat.st_atime, file_stat.st_mtime))
+        logging.info("Finished copying %s in %.03f sec", dest_file, time.perf_counter() - copy_start)
     else:
-        logging.info("%s -> %s is done", src.name, dst)
-
-
-def create_default_config(cfg: ConfigParser, section: str = "Default") -> None:
-    cfg.add_section(section)
-    cfg.set(section, "path", "")
-    cfg.set(section, "format", "")
+        logging.info("File %s is already exists", dest_file)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("source", type=str)
     parser.add_argument("dest", type=str)
-    parser.add_argument("-c", "--config")
+    parser.add_argument("--ext", nargs="+", type=str)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--threads", type=int, default=4)
 
     args = parser.parse_args()
     time_start = time.perf_counter()
+    num_threads = min(1, args.threads)
 
     if args.dry_run:
         logging.info("Dry-run mode is ENABLED")
 
-    dst_path = Path(args.dest)
+    for root, dirs, files in os.walk(args.source):
+        for filename in files:
+            source_file = cast(str, os.path.join(root, filename))
 
-    config = args.config
-    if not config:
-        config = DEFAULT_CONFIG_PATHS
-
-    cfg = ConfigParser(interpolation=None)
-
-    if config_exists := cfg.read(config):
-        logging.info(f"Config loaded: {config_exists}")
-    else:
-        create_default_config(cfg)
-
-    threads = min(1, args.threads)
-    for section in cfg.sections():
-        folder = cfg[section]
-        if "path" not in folder:
-            continue
-
-        folder_fmt = folder.get("destination")
-
-        src_path = Path(args.source) / folder["path"]
-        logging.info("[%s] from %s", section, src_path)
-
-        if not src_path.is_dir():
-            logging.warning("%s not found!", src_path)
-            continue
-        with ThreadPoolExecutor(threads) as t:
-            for src_file in src_path.iterdir():
-                if src_file.is_dir():
+            if args.ext:
+                _, ext = os.path.splitext(filename)
+                if ext.removeprefix(".").lower() not in args.ext:
+                    logging.info("%s skipped by extension", source_file)
                     continue
 
-                src_file_mtime = datetime.fromtimestamp(src_file.stat().st_mtime)
-                dst_path_resolved = Path(src_file_mtime.strftime(str(dst_path)))
-                dst_file = dst_path_resolved / Path(src_file_mtime.strftime(str(folder_fmt))) / src_file.name
-                t.submit(copy_file, src_file, dst_file, args.dry_run)
+            file_stat = os.stat(source_file)
+            source_mtime = datetime.fromtimestamp(file_stat.st_mtime)
+
+            dest_path = source_mtime.strftime(args.dest)
+            dest_file = os.path.join(dest_path, filename)
+
+            with ThreadPoolExecutor(num_threads) as t:
+                t.submit(copy_file, source_file, dest_file, file_stat, args)
 
     if args.dry_run:
         logging.info("Dry-run mode. NO CHANGES MADE")
 
-    logging.debug("Done in %.02f sec", (time.perf_counter() - time_start) / 60)
+    logging.info("Done in %.03f sec", time.perf_counter() - time_start)
 
 
 if __name__ == "__main__":
