@@ -31,9 +31,18 @@ Usage: `sdcopy [OPTIONS] [SOURCE]... DEST`
 * `--dry-run`: Perform a trial run without making changes.
 * `--threads`: Number of concurrent thread for file copying (default: 4).
 
-Example command: copying jpg/jpeg files into separate folders by file modified time and `YYYY-MM-DD` format
+**Example**: Copying jpg/jpeg files into separate folders by file modified time and `YYYY-MM-DD` format
 ```bash
-sdcopy /path/to/source /path/to/destination/%Y-%m-%d/ --ext jpg jpeg"
+sdcopy /path/to/source /path/to/destination/%Y-%m-%d/ --ext jpg jpeg
+```
+
+**Real-world example**: Copying and organize media files from SONY ZVE10 camera:
+```bash
+# Copy photos
+sdcopy /Volumes/SONY/DCIM ~/Pictures/SONY/%Y-%m-%d/RAW Photos --ext jpg dng --threads 4
+
+# Copy videos
+sdcopy /Volumes/SONY/PRIVATE/M4ROOT/CLIP ~/Pictures/SONY/%Y-%m-%d/Videos --ext mp4 xml --threads 4
 ```
 
 ## License
