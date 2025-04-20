@@ -15,6 +15,20 @@ log_level = logging.getLevelNamesMapping().get(LOG_LEVEL, DEFAULT_LOG_LEVEL)
 logging.basicConfig(level=log_level, format=LOG_FORMAT)
 
 
+class NoThreadPoolExecutor:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def submit(self, fn, *args, **kwargs):
+        fn(*args, **kwargs)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+
 def copy_file(source_file: str, dest_file: str, file_stat: os.stat_result, args: argparse.Namespace) -> None:
     if args.dry_run:
         logging.info("Copying %s -> %s in Dry-run mode", source_file, dest_file)
@@ -47,27 +61,28 @@ def main() -> None:
     if args.dry_run:
         logging.info("Dry-run mode is ENABLED")
 
-    for root, dirs, files in os.walk(args.source):
-        for filename in files:
-            source_file = cast(str, os.path.join(root, filename))
+    executor_cls = NoThreadPoolExecutor
+    if num_threads > 1:
+        executor_cls = ThreadPoolExecutor
 
-            if args.ext:
-                _, ext = os.path.splitext(filename)
-                if ext.removeprefix(".").lower() not in args.ext:
-                    logging.info("%s skipped by extension", source_file)
-                    continue
+    with executor_cls(num_threads) as t:
+        for root, dirs, files in os.walk(args.source):
+            for filename in files:
+                source_file = cast(str, os.path.join(root, filename))
 
-            file_stat = os.stat(source_file)
-            source_mtime = datetime.fromtimestamp(file_stat.st_mtime)
+                if args.ext:
+                    _, ext = os.path.splitext(filename)
+                    if ext.removeprefix(".").lower() not in args.ext:
+                        logging.info("%s skipped by extension", source_file)
+                        continue
 
-            dest_path = source_mtime.strftime(args.dest)
-            dest_file = cast(str, os.path.join(dest_path, filename))
+                file_stat = os.stat(source_file)
+                source_mtime = datetime.fromtimestamp(file_stat.st_mtime)
 
-            if num_threads > 1:
-                with ThreadPoolExecutor(num_threads) as t:
-                    t.submit(copy_file, source_file, dest_file, file_stat, args)
-            else:
-                copy_file(source_file, dest_file, file_stat, args)
+                dest_path = source_mtime.strftime(args.dest)
+                dest_file = cast(str, os.path.join(dest_path, filename))
+
+                t.submit(copy_file, source_file, dest_file, file_stat, args)
 
     if args.dry_run:
         logging.info("Dry-run mode. NO CHANGES MADE")
