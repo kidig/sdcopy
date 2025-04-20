@@ -43,7 +43,7 @@ def copy_file(source_file: str, dest_file: str, file_stat: os.stat_result, args:
         os.utime(dest_file, times=(file_stat.st_atime, file_stat.st_mtime))
         logging.info("Finished copying %s in %.03f sec", dest_file, time.perf_counter() - copy_start)
     else:
-        logging.info("File %s is already exists", dest_file)
+        logging.info("File %s already exists", dest_file)
 
 
 def main() -> None:
