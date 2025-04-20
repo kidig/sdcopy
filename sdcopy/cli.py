@@ -38,11 +38,11 @@ def main() -> None:
     parser.add_argument("dest", type=str)
     parser.add_argument("--ext", nargs="+", type=str)
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--threads", type=int, default=4)
+    parser.add_argument("--threads", type=int, default=1)
 
     args = parser.parse_args()
     time_start = time.perf_counter()
-    num_threads = min(1, args.threads)
+    num_threads = max(1, args.threads)
 
     if args.dry_run:
         logging.info("Dry-run mode is ENABLED")
@@ -61,10 +61,13 @@ def main() -> None:
             source_mtime = datetime.fromtimestamp(file_stat.st_mtime)
 
             dest_path = source_mtime.strftime(args.dest)
-            dest_file = os.path.join(dest_path, filename)
+            dest_file = cast(str, os.path.join(dest_path, filename))
 
-            with ThreadPoolExecutor(num_threads) as t:
-                t.submit(copy_file, source_file, dest_file, file_stat, args)
+            if num_threads > 1:
+                with ThreadPoolExecutor(num_threads) as t:
+                    t.submit(copy_file, source_file, dest_file, file_stat, args)
+            else:
+                copy_file(source_file, dest_file, file_stat, args)
 
     if args.dry_run:
         logging.info("Dry-run mode. NO CHANGES MADE")
